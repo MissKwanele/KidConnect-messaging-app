@@ -22,13 +22,17 @@ SANDBOX_WHITELIST = st.secrets["vonage"]["whitelist"]
 # -------------------------------
 # GOOGLE SHEETS SETUP
 # -------------------------------
+import json
+
 @st.cache_resource
 def get_google_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIAL_JSON, scope)
+    service_account_info = st.secrets["google_service_account"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_url(SPREADSHEET_URL).sheet1
+    sheet = client.open_by_url(st.secrets["google"]["spreadsheet_url"]).sheet1
     return sheet
+
 
 sheet = get_google_sheet()
 
