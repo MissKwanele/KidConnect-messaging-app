@@ -16,7 +16,6 @@ VONAGE_FROM_NUMBER = st.secrets["vonage"]["from_number"]
 WHITELIST = st.secrets["vonage"]["whitelist"]
 
 SPREADSHEET_URL = st.secrets["google"]["spreadsheet_url"]
-
 GOOGLE_SA_INFO = st.secrets["google_service_account"]
 
 # --------------------
@@ -79,7 +78,10 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.user = username
             st.success("Logged in!")
-            st.experimental_rerun()
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
         else:
             st.error("Invalid credentials")
     st.stop()
