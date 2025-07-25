@@ -26,10 +26,12 @@ def get_google_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_SA_INFO, scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_url(SPREADSHEET_URL).sheet1
-    return sheet
+    sheet_main = client.open_by_url(SPREADSHEET_URL)
+    parent_sheet = sheet_main.worksheet("Parents")
+    termly_sheet = sheet_main.worksheet("TermlyActivities")
+    return parent_sheet, termly_sheet
 
-sheet = get_google_sheet()
+parent_sheet, termly_sheet = get_google_sheet()
 
 # --------------------
 # Authentication
@@ -78,29 +80,29 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.user = username
             st.success("Logged in!")
-            if hasattr(st, "rerun"):
-                st.rerun()
-            else:
-                st.experimental_rerun()
+            st.experimental_rerun()
         else:
             st.error("Invalid credentials")
     st.stop()
 
 # Dashboard after login
 st.success(f"Logged in as {st.session_state.user.capitalize()}")
-tab1, tab2, tab3 = st.tabs(["Send Message", "Message Log", "Upload Parent List"])
+if st.session_state.user == "principal":
+    tab1, tab2, tab3, tab4 = st.tabs(["Send Message", "Message Log", "Upload Parent List", "📅 Upload Termly Activities"])
+else:
+    tab1, tab2, tab3 = st.tabs(["Send Message", "Message Log", "Upload Parent List"])
 
 with tab1:
     st.subheader("✉️ Compose Message")
-    class_selected = st.radio("Select Class", ["English", "Afrikaans"])
+    class_selected = st.radio("Select Class", ["All Classes", "English", "Afrikaans"])
     message_text = st.text_area("Message to Parents")
     send_now = st.button("Send Now")
 
     if send_now and message_text:
-        data = sheet.get_all_records()
+        data = parent_sheet.get_all_records()
         sent_count = 0
         for row in data:
-            if row.get("Class") != class_selected:
+            if class_selected != "All Classes" and row.get("Class") != class_selected:
                 continue
             name = row.get("Name", "Parent")
             number = str(row.get("PhoneNumber", "")).strip()
@@ -112,10 +114,9 @@ with tab1:
             if status == 202:
                 st.success(f"Sent to {name} ({number})")
                 sent_count += 1
-                # Log to Google Sheet
-                log_row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name, number, class_selected, message_text]
-                sheet.append_row(log_row)
-                time.sleep(1)  # Avoid rate limiting
+                log_row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name, number, row.get("Class", "Unknown"), message_text]
+                parent_sheet.append_row(log_row)
+                time.sleep(1)
             else:
                 st.error(f"Failed to send to {name} ({number}): {resp}")
         st.info(f"Total messages sent: {sent_count}")
@@ -123,7 +124,7 @@ with tab1:
 with tab2:
     st.subheader("📊 Message Log")
     try:
-        df_log = pd.DataFrame(sheet.get_all_records())
+        df_log = pd.DataFrame(parent_sheet.get_all_records())
         st.dataframe(df_log)
     except Exception:
         st.error("Could not load message log.")
@@ -133,12 +134,32 @@ with tab3:
     uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
     if uploaded_file:
         df_parents = pd.read_csv(uploaded_file)
-        sheet.clear()
-        sheet.append_row(df_parents.columns.tolist())
+        parent_sheet.clear()
+        parent_sheet.append_row(df_parents.columns.tolist())
         for _, row in df_parents.iterrows():
-            sheet.append_row(row.tolist())
+            parent_sheet.append_row(row.tolist())
         st.success("Parent list uploaded and saved to Google Sheet!")
 
+if st.session_state.user == "principal":
+    with tab4:
+        st.subheader("📅 Upload Termly Activities (.csv)")
+        uploaded_activities = st.file_uploader("Upload Termly Activities CSV", type=["csv"], key="activities")
+        if uploaded_activities:
+            df_activities = pd.read_csv(uploaded_activities)
+            termly_sheet.clear()
+            termly_sheet.append_row(df_activities.columns.tolist())
+            for _, row in df_activities.iterrows():
+                termly_sheet.append_row(row.tolist())
+            st.success("Termly activities uploaded!")
+
+        st.markdown("---")
+        st.subheader("📖 View Uploaded Termly Activities")
+        try:
+            df_activities_view = pd.DataFrame(termly_sheet.get_all_records())
+            st.dataframe(df_activities_view)
+        except Exception:
+            st.error("Could not load termly activities.")
+
 st.markdown("---")
-st.caption("Built with ❤️ using Streamlit by a Fellow Mommy Demo")
+st.caption("Built with ❤️ using Streamlit by a Fellow Mommy | Vonage Sandbox Demo")
 
