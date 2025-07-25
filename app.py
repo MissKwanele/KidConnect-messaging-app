@@ -11,13 +11,16 @@ import chardet
 # --------------------
 # Config from secrets.toml
 # --------------------
-VONAGE_API_KEY = st.secrets["vonage"]["api_key"]
-VONAGE_API_SECRET = st.secrets["vonage"]["api_secret"]
-VONAGE_FROM_NUMBER = st.secrets["vonage"]["from_number"]
-WHITELIST = st.secrets["vonage"]["whitelist"]
+if 'vonage' not in st.secrets or 'google' not in st.secrets:
+    st.error("Missing required secrets!")
+else:
+    VONAGE_API_KEY = st.secrets["vonage"]["api_key"]
+    VONAGE_API_SECRET = st.secrets["vonage"]["api_secret"]
+    VONAGE_FROM_NUMBER = st.secrets["vonage"]["from_number"]
+    WHITELIST = st.secrets["vonage"]["whitelist"]
 
-SPREADSHEET_URL = st.secrets["google"]["spreadsheet_url"]
-GOOGLE_SA_INFO = st.secrets["google_service_account"]
+    SPREADSHEET_URL = st.secrets["google"]["spreadsheet_url"]
+    GOOGLE_SA_INFO = st.secrets["google_service_account"]
 
 # --------------------
 # Connect to Google Sheets
