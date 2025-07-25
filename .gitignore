@@ -1,0 +1,12 @@
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Python junk
+__pycache__/
+*.pyc
+
+# Colab / notebook cache
+.ipynb_checkpoints/
+
+# Google credentials (if added later)
+*.json
