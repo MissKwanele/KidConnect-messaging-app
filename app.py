@@ -140,5 +140,5 @@ with tab3:
         st.success("Parent list uploaded and saved to Google Sheet!")
 
 st.markdown("---")
-st.caption("Built with ❤️ using Streamlit | Vonage Sandbox Demo")
+st.caption("Built with ❤️ using Streamlit by a Fellow Mommy Demo")
 
