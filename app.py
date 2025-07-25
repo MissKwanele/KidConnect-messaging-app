@@ -11,30 +11,32 @@ import chardet
 # --------------------
 # Config from secrets.toml
 # --------------------
-if 'vonage' not in st.secrets or 'google' not in st.secrets:
-    st.error("Missing required secrets!")
-else:
-    VONAGE_API_KEY = st.secrets["vonage"]["api_key"]
-    VONAGE_API_SECRET = st.secrets["vonage"]["api_secret"]
-    VONAGE_FROM_NUMBER = st.secrets["vonage"]["from_number"]
-    WHITELIST = st.secrets["vonage"]["whitelist"]
+VONAGE_API_KEY = st.secrets["vonage"]["api_key"]
+VONAGE_API_SECRET = st.secrets["vonage"]["api_secret"]
+VONAGE_FROM_NUMBER = st.secrets["vonage"]["from_number"]
+WHITELIST = st.secrets["vonage"]["whitelist"]
 
-    SPREADSHEET_URL = st.secrets["google"]["spreadsheet_url"]
-    GOOGLE_SA_INFO = st.secrets["google_service_account"]
+SPREADSHEET_URL = st.secrets["google"]["spreadsheet_url"]
+GOOGLE_SA_INFO = st.secrets["google_service_account"]
 
 # --------------------
 # Connect to Google Sheets
 # --------------------
 @st.cache_resource
 def get_google_sheet():
+    # Load credentials from Streamlit secrets
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_SA_INFO, scope)
+    
+    # Authorize and open the spreadsheet
     client = gspread.authorize(creds)
     sheet_main = client.open_by_url(SPREADSHEET_URL)
     parent_sheet = sheet_main.worksheet("Parents")
     termly_sheet = sheet_main.worksheet("TermlyActivities")
+    
     return parent_sheet, termly_sheet
 
+# Get the Google Sheets data
 parent_sheet, termly_sheet = get_google_sheet()
 
 # --------------------
