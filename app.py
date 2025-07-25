@@ -6,6 +6,7 @@ from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from requests.auth import HTTPBasicAuth
+import chardet
 
 # --------------------
 # Config from secrets.toml
@@ -80,7 +81,7 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.user = username
             st.success("Logged in!")
-            st.rerun()
+            st.experimental_rerun()
         else:
             st.error("Invalid credentials")
     st.stop()
@@ -133,7 +134,11 @@ with tab3:
     st.subheader("📁 Upload Parent List (.csv)")
     uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
     if uploaded_file:
-        df_parents = pd.read_csv(uploaded_file)
+        raw_data = uploaded_file.read()
+        detected = chardet.detect(raw_data)
+        encoding = detected['encoding']
+        uploaded_file.seek(0)
+        df_parents = pd.read_csv(uploaded_file, encoding=encoding)
         parent_sheet.clear()
         parent_sheet.append_row(df_parents.columns.tolist())
         for _, row in df_parents.iterrows():
@@ -145,7 +150,11 @@ if st.session_state.user == "principal":
         st.subheader("📅 Upload Termly Activities (.csv)")
         uploaded_activities = st.file_uploader("Upload Termly Activities CSV", type=["csv"], key="activities")
         if uploaded_activities:
-            df_activities = pd.read_csv(uploaded_activities)
+            raw_data = uploaded_activities.read()
+            detected = chardet.detect(raw_data)
+            encoding = detected['encoding']
+            uploaded_activities.seek(0)
+            df_activities = pd.read_csv(uploaded_activities, encoding=encoding)
             termly_sheet.clear()
             termly_sheet.append_row(df_activities.columns.tolist())
             for _, row in df_activities.iterrows():
@@ -162,4 +171,3 @@ if st.session_state.user == "principal":
 
 st.markdown("---")
 st.caption("Built with ❤️ using Streamlit by a Fellow Mommy | Vonage Sandbox Demo")
-
