@@ -27,8 +27,9 @@ def get_google_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_SA_INFO, scope)
     client = gspread.authorize(creds)
-    # Use open_by_key with the spreadsheet ID
-    sheet_main = client.open_by_key(SPREADSHEET_URL)  # Note: open_by_key instead of open_by_url
+
+    # Ensure we are using open_by_key, not open_by_url
+    sheet_main = client.open_by_key(SPREADSHEET_URL)  # This should be the spreadsheet ID
     parent_sheet = sheet_main.worksheet("Parents")
     termly_sheet = sheet_main.worksheet("TermlyActivities")
     return parent_sheet, termly_sheet
