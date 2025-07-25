@@ -1,89 +1,142 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import time
 import requests
+import time
+from datetime import datetime
 import gspread
-from requests.auth import HTTPBasicAuth
 from oauth2client.service_account import ServiceAccountCredentials
+from requests.auth import HTTPBasicAuth
 
-# -------------------------------
-# CONFIGURATION
-# -------------------------------
+# --------------------
+# Config from secrets.toml
+# --------------------
 VONAGE_API_KEY = st.secrets["vonage"]["api_key"]
 VONAGE_API_SECRET = st.secrets["vonage"]["api_secret"]
 VONAGE_FROM_NUMBER = st.secrets["vonage"]["from_number"]
-VONAGE_URL = "https://messages-sandbox.nexmo.com/v1/messages"
+WHITELIST = st.secrets["vonage"]["whitelist"]
 
 SPREADSHEET_URL = st.secrets["google"]["spreadsheet_url"]
-CREDENTIAL_JSON = "kidconnect-whatsapp-bot.json"  # Make sure this is in the repo
-SANDBOX_WHITELIST = st.secrets["vonage"]["whitelist"]
 
-# -------------------------------
-# GOOGLE SHEETS SETUP
-# -------------------------------
-import json
+GOOGLE_SA_INFO = st.secrets["google_service_account"]
 
+# --------------------
+# Connect to Google Sheets
+# --------------------
 @st.cache_resource
 def get_google_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    service_account_info = st.secrets["google_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_SA_INFO, scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_url(st.secrets["google"]["spreadsheet_url"]).sheet1
+    sheet = client.open_by_url(SPREADSHEET_URL).sheet1
     return sheet
-
 
 sheet = get_google_sheet()
 
-# -------------------------------
-# VONAGE WHATSAPP SEND FUNCTION
-# -------------------------------
-def send_whatsapp_message(to_number, text):
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+# --------------------
+# Authentication
+# --------------------
+def authenticate(user, password):
+    users = {
+        "principal": "admin123",
+        "staff": "staff123"
     }
+    return users.get(user) == password
 
+# --------------------
+# Send WhatsApp Message via Vonage
+# --------------------
+def send_whatsapp_message(to_number, message):
+    url = "https://messages-sandbox.nexmo.com/v1/messages"
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
     payload = {
         "from": VONAGE_FROM_NUMBER,
         "to": to_number,
         "message_type": "text",
-        "text": text,
+        "text": message,
         "channel": "whatsapp"
     }
-
-    response = requests.post(
-        VONAGE_URL,
-        headers=headers,
-        json=payload,
-        auth=HTTPBasicAuth(VONAGE_API_KEY, VONAGE_API_SECRET)
-    )
-
+    response = requests.post(url, headers=headers, json=payload,
+                             auth=HTTPBasicAuth(VONAGE_API_KEY, VONAGE_API_SECRET))
     return response.status_code, response.text
 
-# -------------------------------
-# STREAMLIT UI
-# -------------------------------
+# --------------------
+# Streamlit UI
+# --------------------
 st.set_page_config(page_title="KidConnect Messaging", layout="centered")
-st.title("📣 KidConnect WhatsApp Messaging App")
-st.markdown("This is a demo prototype to send WhatsApp messages via Vonage Sandbox and log them to Google Sheets.")
+st.title("📱 KidConnect WhatsApp Messenger")
 
-st.write("🕒", datetime.now().strftime("%A %d %B %Y, %H:%M:%S"))
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user" not in st.session_state:
+    st.session_state.user = None
 
-with st.form("send_form"):
-    name = st.text_input("Parent Name", "Parent")
-    number = st.text_input("Recipient WhatsApp Number", "2784XXXXXXX")
-    message = st.text_area("Message", "Hello 👋 your child was absent today.")
-
-    submit = st.form_submit_button("📤 Send Message")
-
-    if submit:
-        if number in SANDBOX_WHITELIST:
-            personalized = f"Hi {name}, {message}"
-            status_code, response = send_whatsapp_message(number, personalized)
-            st.success(f"✅ Sent: {personalized}")
-            sheet.append_row([datetime.now().isoformat(), name, number, message, status_code])
+if not st.session_state.logged_in:
+    st.subheader("🔐 Login")
+    username = st.text_input("Username (principal/staff)")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        if authenticate(username, password):
+            st.session_state.logged_in = True
+            st.session_state.user = username
+            st.success("Logged in!")
+            st.experimental_rerun()
         else:
-            st.error("This number is not whitelisted in the Vonage Sandbox.")
+            st.error("Invalid credentials")
+    st.stop()
+
+# Dashboard after login
+st.success(f"Logged in as {st.session_state.user.capitalize()}")
+tab1, tab2, tab3 = st.tabs(["Send Message", "Message Log", "Upload Parent List"])
+
+with tab1:
+    st.subheader("✉️ Compose Message")
+    class_selected = st.radio("Select Class", ["English", "Afrikaans"])
+    message_text = st.text_area("Message to Parents")
+    send_now = st.button("Send Now")
+
+    if send_now and message_text:
+        data = sheet.get_all_records()
+        sent_count = 0
+        for row in data:
+            if row.get("Class") != class_selected:
+                continue
+            name = row.get("Name", "Parent")
+            number = str(row.get("PhoneNumber", "")).strip()
+            if number not in WHITELIST:
+                st.warning(f"Skipping {name} ({number}): not in whitelist")
+                continue
+            full_msg = f"Hi {name}, {message_text}"
+            status, resp = send_whatsapp_message(number, full_msg)
+            if status == 202:
+                st.success(f"Sent to {name} ({number})")
+                sent_count += 1
+                # Log to Google Sheet
+                log_row = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name, number, class_selected, message_text]
+                sheet.append_row(log_row)
+                time.sleep(1)  # Avoid rate limiting
+            else:
+                st.error(f"Failed to send to {name} ({number}): {resp}")
+        st.info(f"Total messages sent: {sent_count}")
+
+with tab2:
+    st.subheader("📊 Message Log")
+    try:
+        df_log = pd.DataFrame(sheet.get_all_records())
+        st.dataframe(df_log)
+    except Exception:
+        st.error("Could not load message log.")
+
+with tab3:
+    st.subheader("📁 Upload Parent List (.csv)")
+    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+    if uploaded_file:
+        df_parents = pd.read_csv(uploaded_file)
+        sheet.clear()
+        sheet.append_row(df_parents.columns.tolist())
+        for _, row in df_parents.iterrows():
+            sheet.append_row(row.tolist())
+        st.success("Parent list uploaded and saved to Google Sheet!")
+
+st.markdown("---")
+st.caption("Built with ❤️ using Streamlit | Vonage Sandbox Demo")
 
